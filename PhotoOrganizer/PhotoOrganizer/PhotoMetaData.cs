@@ -36,10 +36,15 @@ namespace PhotoOrganizer
     {
         private MetaDataReaderSettings m_Settings { get; }
         private List<PhotoMetaData> m_MetaData { get; set; }
+        private string m_LogFile { get; set; }
 
         public MetaDataReader(MetaDataReaderSettings settings)
         {
             m_Settings = settings;
+            var systemPath = System.Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+            var path = Path.Combine(systemPath, $@"PhotoOrganiser\Logs\");
+            Directory.CreateDirectory(path);
+            m_LogFile = $"{path}{DateTime.UtcNow.ToString("yyyyMMddHHmmss")}.txt";
         }
 
         public void Debug(string file)
@@ -66,13 +71,18 @@ namespace PhotoOrganizer
 
         public List<PhotoMetaData> GetMetaData()
         {
+            WriteToLogFile("GetMetaData()");
             if (m_Settings == null)
-                throw new Exception("MetaDataReader not initilized");
+            {
+                var msg = "MetaDataReader not initilized";
+                WriteToLogFile(msg);
+                Console.WriteLine("");
+                Console.WriteLine(msg);
+                throw new Exception(msg);
+            }
+                
 
             var reply = new List<PhotoMetaData>();
-
-
-
 
             var folders = Directory.GetDirectories(m_Settings.RootFolder);
             foreach (var folder in folders)
@@ -83,35 +93,47 @@ namespace PhotoOrganizer
                 if (folder == m_Settings.OutputFolder)
                     continue;
 
+                var errorList = new List<Exception>();
+
                 var fileCount = 0;
                 foreach (string file in Directory.EnumerateFiles(folder))
                 {
                     fileCount++;
                     if (fileCount < 10000)
                     {
-                        var photo = new PhotoMetaData();
+                        try
+                        {
+                            var photo = new PhotoMetaData();
 
-                        photo.MetaData = ImageMetadataReader.ReadMetadata(file);
+                            photo.MetaData = ImageMetadataReader.ReadMetadata(file);
 
-                        photo.OriginalPath = file;
-                        photo.Folder = folder.Substring(folder.LastIndexOf('\\')+1);
-                        photo.FileName = file.Substring(file.LastIndexOf('\\')+1);
-                        photo.FileExtension = file.Substring(file.LastIndexOf('.') + 1);
-                        photo.DateTimeFromEXIF = DateTimeFromExif(photo.MetaData);
-                        photo.DateTimeFromFileName = ParseDateTimeFromFileName(photo.FileName);
+                            photo.OriginalPath = file;
+                            photo.Folder = folder.Substring(folder.LastIndexOf('\\') + 1);
+                            photo.FileName = file.Substring(file.LastIndexOf('\\') + 1);
+                            photo.FileExtension = file.Substring(file.LastIndexOf('.') + 1);
+                            photo.DateTimeFromEXIF = DateTimeFromExif(photo.MetaData);
+                            photo.DateTimeFromFileName = ParseDateTimeFromFileName(photo.FileName);
 
 
-                        photo.DateTimeTaken = photo.DateTimeFromFileName;
-                        if (photo.DateTimeFromEXIF > photo.DateTimeFromFileName)
-                            photo.DateTimeTaken = photo.DateTimeFromEXIF;
+                            photo.DateTimeTaken = photo.DateTimeFromFileName;
+                            if (photo.DateTimeFromEXIF > photo.DateTimeFromFileName)
+                                photo.DateTimeTaken = photo.DateTimeFromEXIF;
 
-                        reply.Add(photo);
+                            reply.Add(photo);
 
-                        Console.Write($"\r{photo.Folder} {fileCount} Images     ");
-
+                            Console.Write($"\r{photo.Folder} {fileCount} Images     ");
+                        }
+                        catch(Exception ex)
+                        {
+                            errorList.Add(ex);
+                        }
                     }
-                    
                 }
+                Console.WriteLine("");
+                Console.WriteLine($"{folder} had {errorList.Count} files which could not be read");
+
+                WriteToLogFile($"{folder}{fileCount} Images");
+                WriteToLogFile($"{folder} had {errorList.Count} files which could not be read");
             }
 
             m_MetaData = reply;
@@ -120,8 +142,15 @@ namespace PhotoOrganizer
 
         public void CleanOutputFolder()
         {
+            WriteToLogFile("CleanOutputFolder()");
             if (m_Settings == null)
-                throw new Exception("MetaDataReader not initilized");
+            {
+                var msg = "MetaDataReader not initilized";
+                WriteToLogFile(msg);
+                Console.WriteLine("");
+                Console.WriteLine(msg);
+                throw new Exception(msg);
+            }
 
             System.IO.DirectoryInfo di = new DirectoryInfo(m_Settings.OutputFolder);
 
@@ -135,9 +164,16 @@ namespace PhotoOrganizer
 
         public void CopyToNewStructure()
         {
+            WriteToLogFile("CopyToNewStructure()");
             if (m_Settings == null)
-                throw new Exception("MetaDataReader not initilized");
-
+            {
+                var msg = "MetaDataReader not initilized";
+                WriteToLogFile(msg);
+                Console.WriteLine("");
+                Console.WriteLine(msg);
+                throw new Exception(msg);
+            }
+            
             Console.WriteLine(""); //empty line so we know we have a new one
 
             Console.WriteLine("Sorting by Photo.DateTimeTaken");
@@ -146,24 +182,36 @@ namespace PhotoOrganizer
             // read through the metadata and create the folder structure
             Directory.CreateDirectory(m_Settings.OutputFolder);
             var photoCount = 0;
+            var errorList = new List<Exception>();
             foreach(var photo in orderedPhotos)
             {
-                // for now skip the none photos
-                if(photo.FileExtension != "jpg")
-                    continue;
-
-                if(photo.DateTimeTaken == DateTime.MinValue)
-                {
-
-                }
-
                 photoCount++;
                 Console.Write($"\rCopying image {photoCount} of {m_MetaData.Count}         ");
 
                 var newFolder = @$"{m_Settings.OutputFolder}\{photo.DateTimeTaken.ToString("yyyy-MM-dd")}";
                 Directory.CreateDirectory(newFolder);
 
-                File.Copy(photo.OriginalPath, $@"{newFolder}\{photo.DateTimeTaken.ToString("yyyy-MM-dd_HHmmss")} ({photoCount}).{photo.FileExtension}",true);
+                try
+                {
+                    File.Copy(photo.OriginalPath, $@"{newFolder}\{photo.DateTimeTaken.ToString("yyyy-MM-dd_HHmmss")} ({photoCount}).{photo.FileExtension}", true);
+                }
+                catch(Exception ex)
+                {
+                    errorList.Add(ex);
+                }
+            }
+            Console.WriteLine("");
+            Console.WriteLine($"Failed to copy {errorList.Count} photos");
+
+            WriteToLogFile($"{photoCount} Images");
+            WriteToLogFile($"{errorList.Count} files which could not be copied");
+        }
+
+        private void WriteToLogFile(string message)
+        {
+            using (StreamWriter fs = new StreamWriter(m_LogFile,true))
+            {
+                fs.Write($"[{DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss")}]: {message}{Environment.NewLine}");
             }
         }
 

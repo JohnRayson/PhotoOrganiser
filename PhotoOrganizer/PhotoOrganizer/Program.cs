@@ -13,14 +13,16 @@ namespace PhotoOrganizer
             try
             {
                 Console.WriteLine("Hello World!");
+
                 var settings = new MetaDataReaderSettings();
-                settings.RootFolder = @"D:\Documents\Images\Hettie";
-                settings.OutputFolder = @"D:\Documents\Images\Hettie\57days";
+
+                settings.RootFolder = @"D:\Photos\Hettie";            
+                settings.OutputFolder = $@"{settings.RootFolder}\57days";
                 settings.CreateDateExifTag = "Date/Time Original";
 
                 var reader = new MetaDataReader(settings);
 
-                reader.Debug(@"D:\Documents\Images\Hettie\Marie Phone\IMG-20201017-WA0006.jpg");
+                reader.Debug($@"{settings.RootFolder}\Marie Phone\IMG-20201017-WA0006.jpg");
 
                 var photos = reader.GetMetaData();
                 reader.CleanOutputFolder();
