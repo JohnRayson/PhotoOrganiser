@@ -9,4 +9,10 @@
     <PackageReference Include="MetadataExtractor" Version="2.4.3" />
   </ItemGroup>
 
+  <ItemGroup>
+    <None Update="Settings.Conf">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
 </Project>

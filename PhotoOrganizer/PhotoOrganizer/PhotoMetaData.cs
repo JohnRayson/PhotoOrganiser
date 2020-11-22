@@ -10,28 +10,6 @@ using Directory = System.IO.Directory;
 
 namespace PhotoOrganizer
 {
-    public class PhotoMetaData
-    {
-        public string Folder { get; set; }
-        public string OriginalPath { get; set; }
-        public string FileName { get; set; }
-        public DateTime DateTimeFromFileName { get; set; }
-        public DateTime DateTimeFromEXIF { get; set; }
-        public DateTime DateTimeFromFileInfo { get; set; }
-        public DateTime DateTimeTaken { get; set; }
-        public string Photographer { get; set; }
-        public string FileExtension { get; set; }
-        public IReadOnlyList<MetadataExtractor.Directory> MetaData { get; set; }
-    }
-
-    public class MetaDataReaderSettings
-    {
-        public string RootFolder { get; set; }
-        public string OutputFolder { get; set; }
-        public string CreateDateExifTag { get; set; }
-
-    }
-
     public class MetaDataReader
     {
         private MetaDataReaderSettings m_Settings { get; }
@@ -87,11 +65,37 @@ namespace PhotoOrganizer
             var folders = Directory.GetDirectories(m_Settings.RootFolder);
             foreach (var folder in folders)
             {
-                // write to a new line
-                Console.WriteLine(""); // we update this as we go.
                 // skip this folder if its the output
                 if (folder == m_Settings.OutputFolder)
                     continue;
+
+                // work out if we want to include this folder
+                bool process = m_Settings.AllFolders;
+                var folderName = folder.Replace(m_Settings.RootFolder, "");
+
+                // are we explicitly excluding it
+                if (!process)
+                {
+                    foreach (string dir in m_Settings.Includes)
+                    {
+                        if (dir == folderName)
+                            process = true; 
+                    }
+                }
+
+                // are we explicitly excluding it
+                foreach (string dir in m_Settings.Excludes)
+                {
+                    if (dir == folderName)
+                        process = false;
+                }
+
+                if (!process)
+                    continue;
+
+                // processing this folder
+                // write to a new line
+                Console.WriteLine(""); // we update this as we go.
 
                 var errorList = new List<Exception>();
 
@@ -132,7 +136,7 @@ namespace PhotoOrganizer
                 Console.WriteLine("");
                 Console.WriteLine($"{folder} had {errorList.Count} files which could not be read");
 
-                WriteToLogFile($"{folder}{fileCount} Images");
+                WriteToLogFile($"{folder} had {fileCount} Images");
                 WriteToLogFile($"{folder} had {errorList.Count} files which could not be read");
             }
 
@@ -193,7 +197,11 @@ namespace PhotoOrganizer
 
                 try
                 {
-                    File.Copy(photo.OriginalPath, $@"{newFolder}\{photo.DateTimeTaken.ToString("yyyy-MM-dd_HHmmss")} ({photoCount}).{photo.FileExtension}", true);
+                    var newFileName = $@"{newFolder}\{photo.DateTimeTaken.ToString("yyyy-MM-dd_HHmmss")} ({photoCount}).{photo.FileExtension}";
+                    WriteToLogFile($"From: {photo.OriginalPath} to: {newFileName}");
+                    
+                    if(m_Settings.RunOutput)
+                        File.Copy(photo.OriginalPath, newFileName, true);
                 }
                 catch(Exception ex)
                 {
@@ -218,17 +226,24 @@ namespace PhotoOrganizer
         private DateTime ParseDateTimeFromFileName(string file)
         {
             var reply = new DateTime();
+            // strip some starting info off the file name
+            file = file.Replace("VID", "");
+            file = file.Replace("IMG", "");
+            file = file.Replace("_", "");
+            file = file.Replace("-", "");
+
+
             // file names should be yyyyMMdd_HHmmss (hopefully)
-            var regEx = new Regex(@"^20((\d){6})_((\d){6})");
+            var regEx = new Regex(@"^20((\d){6})((\d){6})");
             if(regEx.IsMatch(file))
             {
-                DateTime.TryParseExact(file.Substring(0, 15), "yyyyMMdd_HHmmss", CultureInfo.InvariantCulture, DateTimeStyles.None, out reply);
+                DateTime.TryParseExact(file.Substring(0, 14), "yyyyMMddHHmmss", CultureInfo.InvariantCulture, DateTimeStyles.None, out reply);
             }
             // what if its a silly WhatsApp file name??
-            regEx = new Regex(@"^IMG-(\d){8}-");
+            regEx = new Regex(@"^(\d){8}");
             if (regEx.IsMatch(file))
             {
-                DateTime.TryParseExact(file.Substring(4, 8), "yyyyMMdd", CultureInfo.InvariantCulture, DateTimeStyles.None, out reply);
+                DateTime.TryParseExact(file.Substring(0, 8), "yyyyMMdd", CultureInfo.InvariantCulture, DateTimeStyles.None, out reply);
             }
 
             return reply;

@@ -3,3 +3,6 @@
 ################################################################################
 
 /PhotoOrganizer/PhotoOrganizer/bin/Debug/netcoreapp3.0
+/PhotoOrganizer/PhotoOrganizer/obj
+/PhotoOrganizer/.vs/PhotoOrganizer
+/PhotoOrganizer/PhotoOrganizer/Settings.Conf
